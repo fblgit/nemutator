@@ -119,3 +119,14 @@ I have the impression that Scheduler will always prefer to push the container in
   - If nemutator can generate unix sockets and use those channels to refresh credentials on pod restarts (like cloudflare pald) this may work.
   - It may need a 'nemutator_secrets_agent' per node, which is definitively better than an agent per pod
   - Nemutator may need to inject a initContainer that can mount this unix socket, but I think there must be an existing mechanism somewhere within the Kubernetes brain... but where ?
+
+# Fun Experiments to be done
+* I've seen a negative effect when a user that is granted privileged via features like IAM is not just slow, but on large clusters may hit the ratelimit of the API. I believe that linking a local service account of the cluster for both nemutator and the tower should fix this.
+* How fast this can scrape 500nodes / 1000pods clusters ?
+* How much, in a safe way, can nemutator optimize a workload ?
+
+# Extra Bits
+I wonder (sarcasm) why the big G, and other big folks.. are not really investing engineering time on making the VPA better. It seems that the development is quite stuck.
+There is this Multidimensional Pod Autoscaler (MPA), hehe.. only available in G-Cloud. How much of their reveneu is created by entities that are not being able to optimise their workload and squeeze up to the last bit of their compute power ? ha.. probably thats the real cause of myself building this prototype.
+
+Hope they don't send me a hitman..
