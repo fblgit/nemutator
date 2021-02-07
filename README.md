@@ -15,6 +15,7 @@ lifecycle of a pod and whenever is possible, prefer "re-create" over "restart" (
 Some good friend will be a restful interface that WILL help Nemutator to evict pods in order to adjust and shift the load accordingly.
 
 If i make it works, we'll find some good golang comanches that can put good lines behind it and i'll move on into something new :P
+![alt text](https://github.com/fblgit/nemutator/raw/main/images/Nemutator.png)
 
 Some of the features:
 * Mutate limits & requests of pods by the mutation controller (simple example added)
