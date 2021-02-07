@@ -28,7 +28,7 @@ Some of the features:
 * Improve overprovisioning shims with the help of Nemutator and ultimately see if we can reduce requests on off-peak and shrink even more in
   a more natural way without disruption
 
-# Progress by 07 Feb 2021
+# Progress so far..
 * Able to mutate resources:
   - Query Prometheus Metric for a pod (code is in simulation mode, gathering from other pod data for testing purposes)
   - Capable of min/avg/max both for CPU and MEM
@@ -49,6 +49,11 @@ Some of the features:
 * Crated understanding for skipping elements of the mutation with an annotation:
   - nemutator.io/skip-mutation: $verbs
   Where verbs so far are: env, labels, annotations, image, resources, containers, patch
+* Created the first version of the metrics scraper:
+  - Able to create a structure with pods, replicaset, deployments
+  - Able to scrape metrics from pods and deployments (cpu & mem)
+  - Able to scrape metrics for nodes (cpu & mem)
+  - Able to individually update elements and reconciliate their relations without discarding useful data
 
 # Usage of skip verbs:
 Very simple, if you set skip annotation to true.. it won't do or even process anything. (Fast out)
@@ -57,6 +62,30 @@ If you set a verb of the list, it will skip it from processing that element/s. T
 
 Something useful that can be done is to just skip patch, that would process all the logic of all the realms and scenarios but won't produce any change.
 It can be used, and should, as a way to dry-run what nemutator "would" do.
+
+# Metrics Scraper
+It looks something like this:
+- Pods:
+  'redis-master-0': {'containers': ['redis', 'metrics'],
+                             'metrics': {'cpu': {'avg': 11.98,
+                                                 'max': 17.96,
+                                                 'min': 0.54},
+                                         'mem': {'avg': 60.56,
+                                                 'max': 60.56,
+                                                 'min': 6.32}},
+                             'namespace': 'redis'},
+- Deployments:
+                 'grafana': {'metrics': {'cpu': {'avg': 9.39,
+                                                 'max': 17.23,
+                                                 'min': 1.55},
+                                         'mem': {'avg': 83.05,
+                                                 'max': 83.05,
+                                                 'min': 83.05}},
+                             'namespace': 'monitoring',
+                             'pods': ['grafana-77945f8f6f-n5szq'],
+                             'replicas': 'grafana-77945f8f6f'},
+- Nodes:
+ ( need to finish this model )
 
 # Thoughts
 One of the scopes is to "somehow" help the scheduler. There are many different ways to mess the scheduler big time and there are many ways to produce affinity and antiaffinity.
