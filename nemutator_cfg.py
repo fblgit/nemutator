@@ -7,5 +7,13 @@ cfg = {
     'redis': {
         'ip': '192.168.0.65',
         'db': 0,
+    },
+    'tower': {
+        'enabled': True,
+        'bootload': True,
+        'label': 'nemu.io~1stats',
+        'structure': 'podcpu_podmem_depcpu_depmem_replicas',
+        'pod_interval': 120,
+        'dep_interval': 600
     }
 }
