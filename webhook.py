@@ -199,37 +199,50 @@ class MutatorHook(Resource):
             containers = payload.get('spec', {}).get('containers', False)
             container_name = payload.get('metadata', {}).get('name', 'default_name')
             # LABELS
-            if payload.get('metadata', {}).get('labels', {}):
+            if payload.get('metadata', {}).get('labels', {}) and 'labels' not in skip_modes:
                 for label in org_payload['metadata']['labels'].keys():
                     if 'nemu_label_' not in label[0:11]:
                         continue
                     result = r.get_label(label)
-                    if result and 'env' not in skip_modes:
+                    if result:
                         old_value = payload['metadata']['labels'][label]
                         del payload['metadata']['labels'][label]
                         payload['metadata']['labels'][result] = old_value
                         log.info(f'[MUTATE-LABEL] ({operation_mode}) {container_name} Mutated LABEL Key {label} to {result}')
-            if payload.get('metadata', {}).get('labels', {}):
+            if payload.get('metadata', {}).get('labels', {}) and 'labels' not in skip_modes:
                 for label in payload['metadata']['labels'].keys():
-                    if 'nemu_label_value_' not in payload['metadata']['labels'][label][0:]:
+                    if 'nemu_label_value_' not in payload['metadata']['labels'][label][0:17]:
                         continue
                     result = r.get_label(payload['metadata']['labels'][label])
-                    if result and 'env' not in skip_modes:
+                    if result:
                         if payload['metadata']['labels'][label] != result:
                             payload['metadata']['labels'][label] = result
                             log.info(f'[MUTATE-LABEL] ({operation_mode}) {container_name} Mutated LABEL Value {label} to {result}')
                             if 'labels' not in mutations:
                                 mutations.append('labels')
             # ANNOTATIONS
-            if payload.get('metadata', {}).get('annotations', {}):
-                annotations = payload['metadata']['annotations']
-                for annotation in annotations:
-                    if 'nemu_anno_' in annotation[0:10]:
-                        result = r.get_annotation(annotation)
-                        if result and 'annotations' not in skip_modes:
-                            log.info(f'[MUTATE-ANNOTATION] ({operation_mode}) {container_name} Mutated ANNOTATION {annotation} to {result}')
+            if payload.get('metadata', {}).get('annotations', {}) and 'annotations' not in skip_modes:
+                for annotation in org_payload['metadata']['annotations'].keys():
+                    if 'nemu_anno_' not in annotation[0:10]:
+                        continue
+                    result = r.get_annotation(annotation)
+                    if result:
+                        old_value = payload['metadata']['annotations'][annotation]
+                        del payload['metadata']['annotations'][annotation]
+                        payload['metadata']['annotations'][result] = old_value
+                        log.info(f'[MUTATE-ANNOTATION] ({operation_mode}) {container_name} Mutated ANNOTATION Key {annotation} to {result}')
+            if payload.get('metadata', {}).get('annotations', {}) and 'annotations' not in skip_modes:
+                for annotation in payload['metadata']['annotations'].keys():
+                    if 'nemu_anno_value_' not in payload['metadata']['annotations'][annotation][0:16]:
+                        continue
+                    result = r.get_annotation(payload['metadata']['annotations'][annotation])
+                    if result:
+                        if payload['metadata']['annotations'][annotation] != result:
                             payload['metadata']['annotations'][annotation] = result
-            if containers:
+                            log.info(f'[MUTATE-ANNOTATION] ({operation_mode}) {container_name} Mutated ANNOTATION Value {annotation} to {result}')
+                            if 'annotations' not in mutations:
+                                mutations.append('annotations')
+            if containers and 'containers' not in skip_modes:
                 # containers are present
                 RATIO_CPU = 5.0
                 RATIO_MEM = 3.0
@@ -238,7 +251,7 @@ class MutatorHook(Resource):
                     container_name = container.get('name', 'default')
                     # ENV
                     # {.. 'command': ['sleep', 'infinity'], 'env': [{'name': 'my', 'value': 'password'}] ... }
-                    if 'env' in container:
+                    if 'env' in container and 'env' not in skip_modes:
                         for env in range(0, len(container['env'])):
                             env_name = container['env'][env]['name']
                             env_value = container['env'][env]['value']
@@ -248,18 +261,18 @@ class MutatorHook(Resource):
                                 # it can be a db, a vault, etc.. for this demo, i will use redis
                                 env_pass = r.get_pass(env_hash)
                                 if env_pass:
-                                    if 'env' not in mutations and 'env' not in skip_modes:
+                                    if 'env' not in mutations:
                                         mutations.append('env')
                                     log.info(f'[MUTATE-ENV] ({operation_mode}) {container_name} Mutated ENV {env_name} from {env_value} to *SECRET*')
                                     payload['spec']['containers'][x]['env'][env]['value'] = env_pass
                                 else:
                                     log.info(f'[MUTATE-ENV] ({operation_mode}) {container_name} Mutated ENV {env_name} from {env_value} *NOT FOUND*')
                     # IMAGE (enforcement of version)
-                    if 'image' in container:
+                    if 'image' in container and 'image' not in skip_modes:
                         image_version = container['image'].split(':')[-1]
                         image_name = container['image'].split(':')[0]
                         result = r.get_image_version(f'nemu_image_{image_name}')
-                        if result and 'image' not in skip_modes:
+                        if result and 'image':
                             new_image = f'{image_name}:{result}'
                             old_image = f'{image_name}:{image_version}'
                             if new_image != old_image:
@@ -289,18 +302,19 @@ class MutatorHook(Resource):
                             cur_resources['requests_mem'] = float(get_bytes(requests['memory']))
                             new_resources['requests']['memory'] = get_mb(cur_resources['requests_mem'] / RATIO_MEM)
                         # simulation
-                        prometheus_metrics = {
-                            'mem': query_prometheus('tuya-ws', nature='mem'),
-                            'cpu': query_prometheus('tuya-ws', nature='cpu')
-                        }
-                        log.info(f"[RESOURCES] ({operation_mode}) {container_name} PromAvgCPU: {prometheus_metrics['cpu']} PromMaxMem: {prometheus_metrics['mem']}")
-                        log.info(f"[LIMITS] ({operation_mode}) {container_name} CPU: {int(prometheus_metrics['cpu']['max'] * 1.33)}m max+33% & MEM: {int(prometheus_metrics['mem']['max'] * 1.33)}Mi max+33%")
-                        log.info(f"[REQUESTS] ({operation_mode}) {container_name} CPU: {int(prometheus_metrics['cpu']['avg'] * 1.1)}m (avg+10%) & MEM: {int(prometheus_metrics['mem']['avg'] * 1.10)}Mi (avg+10%)")
-                        log.info(f"[DEVIATION] ({operation_mode}) {container_name} CPU Peak: {prometheus_metrics['cpu']['peak']}% vs CPU Off: {prometheus_metrics['cpu']['off']}%")
-                        log.info(f"[DEVIATION] ({operation_mode}) {container_name} MEM Peak: {prometheus_metrics['mem']['peak']}% vs MEM Off: {prometheus_metrics['mem']['off']}%")
-                        if 'prom_resources' not in mutations:
-                            mutations.append('prom_resources')
-                            ## here we should replace the payload (if agreed with a formula)
+                        if 'prom_resources' not in skip_modes:
+                            prometheus_metrics = {
+                                'mem': query_prometheus('tuya-ws', nature='mem'),
+                                'cpu': query_prometheus('tuya-ws', nature='cpu')
+                            }
+                            log.info(f"[RESOURCES] ({operation_mode}) {container_name} PromAvgCPU: {prometheus_metrics['cpu']} PromMaxMem: {prometheus_metrics['mem']}")
+                            log.info(f"[LIMITS] ({operation_mode}) {container_name} CPU: {int(prometheus_metrics['cpu']['max'] * 1.33)}m max+33% & MEM: {int(prometheus_metrics['mem']['max'] * 1.33)}Mi max+33%")
+                            log.info(f"[REQUESTS] ({operation_mode}) {container_name} CPU: {int(prometheus_metrics['cpu']['avg'] * 1.1)}m (avg+10%) & MEM: {int(prometheus_metrics['mem']['avg'] * 1.10)}Mi (avg+10%)")
+                            log.info(f"[DEVIATION] ({operation_mode}) {container_name} CPU Peak: {prometheus_metrics['cpu']['peak']}% vs CPU Off: {prometheus_metrics['cpu']['off']}%")
+                            log.info(f"[DEVIATION] ({operation_mode}) {container_name} MEM Peak: {prometheus_metrics['mem']['peak']}% vs MEM Off: {prometheus_metrics['mem']['off']}%")
+                            if 'prom_resources' not in mutations:
+                                mutations.append('prom_resources')
+                                ## here we should replace the payload (if agreed with a formula)
                         log.info(f'[MUTATION-RESOURCES] ({operation_mode}) {container_name} Rationed From {old_resources} to {new_resources}')
                         if 'resources' not in mutations:
                             mutations.append('resources')
