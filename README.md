@@ -41,7 +41,7 @@ Some of the features:
   - Query Redis to mutate an Annotation Key 'nemu_anno_<hash>' to 'whatever_is_the_annotation'
   - Query Redis to mutate an Annotation Value 'nemu_anno_value_<hash>' to 'whatever_is_the_annotation_content'
 * Able to mutate env:
-  - Query Redis to mutate a Env Value 'nemu_<hash' to 'whatever_is_the_env_value'
+  - Query Redis to mutate a Env Value 'nemu_<hash>' to 'whatever_is_the_env_value' (have to fix this label to 'nemu_env_<hash>'
 * Able to mutate image versions in a forceful manner
   - Query Redis to mutate Image Version 'ubuntu:14.04' vs 'nemu_image_ubuntu' to 'ubuntu:20.04'
 * Created understanding for skipping all nemutator with an annotation:
@@ -82,6 +82,11 @@ I have the impression that Scheduler will always prefer to push the container in
   - I think it will be wise to apply profiling to pods that has been alive for longer periods. This will eventually flag leaks and other problems in the code.
   - There must be a mechanism to identify GoLang workload, as this tool would only support those. But how ? (if u give a label, then thats it.. but if not?)
 * The Good & Ugly, the bad neighbours:
-  - There must be a way to score pods from multiple metrics of prometheus. Injecting those labels to both the deployments and the pods is crucial. These label must be updated frequently as result of their historical score and their short term score. This will allow to group for a short space of time many kind of pods during off-peak and then spread them out during peak. The target is to allow shrinks in better ways.
+  - There must be a way to score pods from multiple metrics of prometheus. Injecting those labels to both the deployments and the pods is crucial. These label must be updated frequently as result of their historical score and their short term score. This will allow to group for a short space of time many kind of pods during off-peak and then spread them out during peak. The target is to allow shrinks in better ways. Having this label will improve substantially the performance and speed of the Score plugin, but it have to be maintained and refreshed async for a 'short' (now) score, 'usually' (avg) score, 'worst' (max) score..
   - Computing score for both a single pod and a whole deployment is pretty much needed. In together with the Score plugin for the scheduler, this simple bold metric should drive a big influencer on the Score.
   - example thoughts: it doesnt matter if my Deployment A is a big consumption element if right now there is no such compute demand. The capacity of shrinking and grouping old-bad vs now-good in a off-peak is crucial for resources efficiency
+* Better Passwords Refresh:
+  - This is a topic that I find very interesting and it seems to me.. everyone is in the same bag.
+  - If nemutator can generate unix sockets and use those channels to refresh credentials on pod restarts (like cloudflare pald) this may work.
+  - It may need a 'nemutator_secrets_agent' per node, which is definitively better than an agent per pod
+  - Nemutator may need to inject a initContainer that can mount this unix socket, but I think there must be an existing mechanism somewhere within the Kubernetes brain... but where ?
