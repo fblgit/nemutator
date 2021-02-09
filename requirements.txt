@@ -2,3 +2,7 @@ flask
 flask_restful
 IPython
 requests
+kubernetes
+redis
+prometheus_api_client
+jsonpatch
