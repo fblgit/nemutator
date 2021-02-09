@@ -18,15 +18,18 @@ If i make it works, we'll find some good golang comanches that can put good line
 ![alt text](https://github.com/fblgit/nemutator/raw/main/images/Nemutator.png)
 
 Some of the features:
-* Mutate limits & requests of pods by the mutation controller (simple example added)
+* Mutate limits & requests of pods and set the right values directly from prometheus telemetry
 * Get some meaningful metric from Prometheus and use it to make some sense on the resources (it is encouraged record rules to be created at prom side)
 * Manipulate labels/annotations without redeploy deployments
+* Manipulate tolerations of pods to adjust dynamically to the current condition of the cluster
+* Manipulate images of the containers and its $tag/version
+* Mutate selectors of deployments
 * Inject secrets as env, where we will tie hashes/dictionaries within the deployments that ultimately translate in paths of vault, at a lower cost.
 * Understand what is peak-season and what is off-season by himself, and apply different "brainset" on those two scenarios
 * Profile some stuff, thru flamegraph/ebpf golangs, without break things
 * Support some third party provider like datadog and datasources like Redis for caching or who knows..
-* Improve overprovisioning shims with the help of Nemutator and ultimately see if we can reduce requests on off-peak and shrink even more in
-  a more natural way without disruption
+* Improve overprovisioning shims with the help of Nemutator and ultimately see if we can reduce requests on off-peak and shrink even more in a more natural way without disruption
+* Rollback capability, thru storing patches and their reverse patch. Ultimately, a rollback is made by the results of the mutation_log. (Pods: delete pod, Deployments: patch)
 
 # Progress so far..
 * Able to mutate resources:
@@ -44,16 +47,33 @@ Some of the features:
   - Query Redis to mutate a Env Value 'nemu_<hash>' to 'whatever_is_the_env_value' (have to fix this label to 'nemu_env_<hash>'
 * Able to mutate image versions in a forceful manner
   - Query Redis to mutate Image Version 'ubuntu:14.04' vs 'nemu_image_ubuntu' to 'ubuntu:20.04'
+  - This seems to be helpful when you want to verify HASH of the image, its source, etc. it looks more like a enforcement element.
 * Created understanding for skipping all nemutator with an annotation:
   - nemutator.io/skip: true
 * Crated understanding for skipping elements of the mutation with an annotation:
   - nemutator.io/skip-mutation: $verbs
-  Where verbs so far are: env, labels, annotations, image, resources, containers, patch
+  Where verbs so far are: env, labels, annotations, image, resources, containers, patch, selectors, prom_metrics
 * Created the first version of the metrics scraper:
   - Able to create a structure with pods, replicaset, deployments
   - Able to scrape metrics from pods and deployments (cpu & mem)
   - Able to scrape metrics for nodes (cpu & mem)
   - Able to individually update elements and reconciliate their relations without discarding useful data
+  - It also includes deployment label on pods and replicas, as well as replica in deployments for graph link visualization
+  - Added resources (limits/requests) to pods and subsequently is aggregated into the deployment data structure
+  - Improved pod and deployment metrics to use a multivector query to prometheus like a(b(c[3d:1m])[3d:1m]). To be more precise, adapted it to be max_over_time(rate(x)[v:s])[v:s] so it can produce more accurate max/min on CPU consumptions for both pods and deployments
+  - Added a small function to export the pods, replicas, and deployments to JSON files (separated and as list)
+  - Moved the element of prometheus to the "telemetry" module
+* Able to mutate spec.selectors for deployments either Key, Value or both
+  - In together with label mutatons, this should provide the capacity to adapt labels on the fly that are being used as well for selectors
+  - This requires to set a current list of selector label keys that are affected by this mutation process and that should be always verified
+* Created the "kube" module that is heavily used by the scraper but that haves several functons that may be useful
+  - More precisely the fact of scanning K8s thru the API is something that we may need in the future
+  - Some scenario: reducing rolling strategy to be slow for a specific situation where we want to reconcile labels/selectors/etc. example: podA have a wrong label, as well as a wrong selector: mutate, but during off-peak trigger a redeployment of a patched label/selectors version of the deployment that owns those flagged pods. Rolling at 0/1 despite being slow it is very safe on large workloads, once finished we patch back the rolling to its original value.
+* Moved the redis part that queries for the labels, annotations, envs, etc to the module "tpdb" (aka third-party database)
+  - This shold be a simpler way to alter some function that is in charge to fetch something, by ex.. envs to use vault, or similar.. or labels to be gather from a DB somewhere else.
+* Moved the mutation itself to the "webhook" module, you can run it separately
+* The scaper is a combination of "kube"+"telemetry" functions
+* Moved the common tools that are used to format sizes, cpu units,etc to the "tools" module
 
 # Usage of skip verbs:
 Very simple, if you set skip annotation to true.. it won't do or even process anything. (Fast out)
@@ -114,6 +134,7 @@ I have the impression that Scheduler will always prefer to push the container in
   - There must be a way to score pods from multiple metrics of prometheus. Injecting those labels to both the deployments and the pods is crucial. These label must be updated frequently as result of their historical score and their short term score. This will allow to group for a short space of time many kind of pods during off-peak and then spread them out during peak. The target is to allow shrinks in better ways. Having this label will improve substantially the performance and speed of the Score plugin, but it have to be maintained and refreshed async for a 'short' (now) score, 'usually' (avg) score, 'worst' (max) score..
   - Computing score for both a single pod and a whole deployment is pretty much needed. In together with the Score plugin for the scheduler, this simple bold metric should drive a big influencer on the Score.
   - example thoughts: it doesnt matter if my Deployment A is a big consumption element if right now there is no such compute demand. The capacity of shrinking and grouping old-bad vs now-good in a off-peak is crucial for resources efficiency
+  - Update: this seems to be much more feasible with topk(x) of prometheus, but it have to be aware of the # of nodes in the cluster, making this wrong could end in a bad result.
 * Better Passwords Refresh:
   - This is a topic that I find very interesting and it seems to me.. everyone is in the same bag.
   - If nemutator can generate unix sockets and use those channels to refresh credentials on pod restarts (like cloudflare pald) this may work.

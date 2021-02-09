@@ -1,6 +1,7 @@
+import base64
 import json
 import logging
-import base64
+import time
 import jsonpatch
 from flask import Flask, request
 from flask_restful import Resource, Api
@@ -16,6 +17,8 @@ class MutatorHook(Resource):
         self.tpdb = R()
         self.tpdb.conn(cfg)
         self.selectors_list = self.tpdb.get_selectors_replace()
+        self.patch_folder = './patches'
+        self.mutation_log = f'{self.patch_folder}/nemutator-rollback.json'
 
     def post(self):
         payload = json.loads(request.data)
@@ -37,9 +40,11 @@ class MutatorHook(Resource):
                     skip_modes.append(mode)
                     log.info(f'[SKIP-{mode.upper()}] ({operation_mode}) by {uid} by skip:{mode} annotation')
         mutations = []
+        object_name = 'NO_NAME_YET'
         if object_kind == 'Deployment':
             # SELECTOR tied to Labels
             deployment_name = payload.get('metadata', {}).get('name', 'unknown')
+            object_name = deployment_name
             if payload.get('spec', {}).get('selector', {}) and 'selector' not in skip_modes:
                 for s_key in org_payload['spec']['selector']:
                     if s_key in self.selectors_list:
@@ -63,6 +68,7 @@ class MutatorHook(Resource):
         elif object_kind == 'Pod' and operation_mode in ['UPDATE', 'CREATE']:
             containers = payload.get('spec', {}).get('containers', False)
             container_name = payload.get('metadata', {}).get('name', 'default_name')
+            object_name = container_name
             # LABELS
             if payload.get('metadata', {}).get('labels', {}) and 'labels' not in skip_modes:
                 for label in org_payload['metadata']['labels'].keys():
@@ -189,6 +195,16 @@ class MutatorHook(Resource):
         if org_payload != payload and 'patch' not in skip_modes:
             patch = jsonpatch.make_patch(json.loads(request.data)['request']['object'], payload)
             if patch and uid:
+                rollback_patch = jsonpatch.make_patch(payload, json.loads(request.data)['request']['object'])
+                action_log = {
+                    'type': object_kind.lower(),
+                    'operation': operation_mode,
+                    'object': object_name,
+                    'uid': uid,
+                    'rollback_patch': f'ROLLBACK_{uid}.json',
+                    'mutation_patch': f'PATCH_{uid}.json',
+                    'time': time.time()
+                }
                 log.debug(f'[JSON-PATCH] ({operation_mode}) {uid} >> {patch}')
                 result = {
                     'apiVersion': apiVersion,
@@ -201,6 +217,14 @@ class MutatorHook(Resource):
                     }
                 }
                 log.info(f'[PATCH] ({operation_mode}) {uid} with {result}')
+                with open(f'{self.patch_folder}/PATCH_{uid}.json', 'w') as patch_file:
+                    patch_file.write(str(patch))
+                with open(f'{self.patch_folder}/ROLLBACK_{uid}.json', 'w') as patch_file:
+                    patch_file.write(str(rollback_patch))
+                with open(self.mutation_log, 'a+') as mutation_log:
+                    mutation_log.write(json.dumps(action_log))
+                    mutation_log.write('\n')
+                    log.debug(f'[MUTATION-LOG] ({operation_mode}) {uid} >> {object_kind} {object_name} Log and Patches Stored on {self.mutation_log}')
         #log.debug(f'[POST] to {path} >> H: {headers} >> D: {pprint(json.loads(request.data))}')
         return result, 200, {'Content-Type': 'application/json', 'Connection': 'close'}
 
