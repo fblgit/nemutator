@@ -15,5 +15,9 @@ cfg = {
         'structure': 'podcpu_podmem_depcpu_depmem_replicas',
         'pod_interval': 120,
         'dep_interval': 600
+    },
+    'ssl': {
+        'crt': 'cubo.crt',
+        'key': 'cubo.key'
     }
 }
