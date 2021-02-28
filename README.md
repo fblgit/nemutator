@@ -1,4 +1,9 @@
-# nemutator the tentacle friend of kubernetes
+# Just to clarify, this is a POC Prototype that you can't run without some python knowledge to adjust some hardcoded elements that are present for my tests.
+- webhook > requests/limit > hardcoded tuya-ws, replace it by the $var of the deployment name.
+- telemetry > prometheus url > either use the method of k8s discovery of write yours there
+- certificates > thats an internal CA, you can use it if u want no big deal.. it doesn't open any secret door.
+
+# nemutator the tentacle friend of kubernetes (Work In Progress)
 
 This projects doesn't aim (yet) for a production ready solution, but mostly for a fast prototype of the concept itself.
 One of the main reasons, is that the author (myself) believes that should be done within GoLang but speed-to-market is what is being targeted at first.
